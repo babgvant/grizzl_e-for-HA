@@ -44,6 +44,8 @@ class GrizzleEBinarySensor(CoordinatorEntity, BinarySensorEntity):
 
     @property
     def is_on(self):
+        if not self.coordinator.data:
+            return None
         val = self.coordinator.data.get(self._key)
         if isinstance(val, (int, float)):
             return val != 0
