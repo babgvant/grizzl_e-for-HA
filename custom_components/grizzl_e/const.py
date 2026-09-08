@@ -22,6 +22,9 @@ DEFAULT_HOST = "192.168.30.133"
 DEFAULT_SCAN_INTERVAL = 5
 
 # Timeout values (in seconds)
-REQUEST_TIMEOUT = 10  # Total request timeout
+REQUEST_TIMEOUT = 30  # Total request timeout
 CONNECT_TIMEOUT = 5   # Connection timeout
-SOCKET_TIMEOUT = 5    # Socket read timeout
+SOCKET_TIMEOUT = 15   # Socket read timeout
+
+# Number of times to retry a failed poll before marking the update failed
+REQUEST_RETRIES = 1

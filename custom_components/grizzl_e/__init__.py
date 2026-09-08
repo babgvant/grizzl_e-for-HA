@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import aiohttp
 from datetime import timedelta
@@ -7,8 +8,8 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
-    DOMAIN, DEFAULT_SCAN_INTERVAL, 
-    REQUEST_TIMEOUT, CONNECT_TIMEOUT, SOCKET_TIMEOUT
+    DOMAIN, DEFAULT_SCAN_INTERVAL,
+    REQUEST_TIMEOUT, CONNECT_TIMEOUT, SOCKET_TIMEOUT, REQUEST_RETRIES
 )
 from .device import GrizzleEDevice
 
@@ -39,17 +40,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     async def async_update_data():
         """Fetch data from Grizzl-E device."""
         url = f"http://{host}/main"
-        try:
-            async with session.post(
-                url,
-                auth=aiohttp.BasicAuth(username, password),
-                timeout=timeout,
-            ) as resp:
-                if resp.status != 200:
-                    raise UpdateFailed(f"Bad status {resp.status}")
-                return await resp.json(content_type=None)
-        except Exception as err:
-            raise UpdateFailed(f"Error fetching Grizzl-E data: {err}")
+        last_err = None
+        for attempt in range(REQUEST_RETRIES + 1):
+            try:
+                async with session.post(
+                    url,
+                    auth=aiohttp.BasicAuth(username, password),
+                    timeout=timeout,
+                ) as resp:
+                    if resp.status != 200:
+                        raise UpdateFailed(f"Bad status {resp.status}")
+                    return await resp.json(content_type=None)
+            except UpdateFailed:
+                raise
+            except (aiohttp.ClientError, asyncio.TimeoutError) as err:
+                last_err = err
+                if attempt < REQUEST_RETRIES:
+                    _LOGGER.debug(
+                        "Grizzl-E poll attempt %s/%s failed (%s); retrying",
+                        attempt + 1, REQUEST_RETRIES + 1, err,
+                    )
+            except Exception as err:
+                raise UpdateFailed(f"Error fetching Grizzl-E data: {err}")
+        raise UpdateFailed(f"Error fetching Grizzl-E data: {last_err}")
 
     # Initialize coordinator
     scan_seconds = entry.options.get("scan_interval", DEFAULT_SCAN_INTERVAL)

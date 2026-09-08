@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.8
+- Reduce "Timeout on reading data from socket" errors: raised `SOCKET_TIMEOUT` to 15s and `REQUEST_TIMEOUT` to 30s, and added a single automatic retry (`REQUEST_RETRIES`) before a poll is marked failed. Timeout/connection errors between retries are logged at debug level only.
+
 ## v1.0
 - First full release!
 - **Breaking changes from pre-release versions**: the domain has changed from `grizzl-e` to `grizzl_e` to match some of the restricted namespaces across Home Assistant/HACS. This will require a reinstallation of the integration.
