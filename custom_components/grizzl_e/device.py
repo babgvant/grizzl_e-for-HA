@@ -1,16 +1,39 @@
 """Device class for Grizzl-E EV Charger."""
+import aiohttp
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import DOMAIN, MANUFACTURER, MODEL
+from .const import (
+    DOMAIN, MANUFACTURER, MODEL,
+    REQUEST_TIMEOUT, CONNECT_TIMEOUT, SOCKET_TIMEOUT,
+)
 
 class GrizzleEDevice:
     """Grizzl-E device."""
 
-    def __init__(self, coordinator: DataUpdateCoordinator, entry):
+    def __init__(self, coordinator: DataUpdateCoordinator, entry, session):
         """Initialize the device."""
         self.coordinator = coordinator
         self.entry = entry
+        self.session = session
+
+    async def async_send_command(self, endpoint: str, params: dict) -> None:
+        """POST a form-encoded control command to the EVSE."""
+        timeout = aiohttp.ClientTimeout(
+            total=REQUEST_TIMEOUT, connect=CONNECT_TIMEOUT, sock_read=SOCKET_TIMEOUT
+        )
+        async with self.session.post(
+            f"http://{self.entry.data['host']}/{endpoint}",
+            auth=aiohttp.BasicAuth(
+                self.entry.data["username"], self.entry.data["password"]
+            ),
+            data=params,
+            timeout=timeout,
+        ) as resp:
+            if resp.status != 200:
+                raise HomeAssistantError(f"Grizzl-E command failed: HTTP {resp.status}")
+        await self.coordinator.async_request_refresh()
 
     @property
     def device_info(self) -> DeviceInfo:
