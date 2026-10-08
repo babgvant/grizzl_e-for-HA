@@ -1,6 +1,13 @@
 # Charge the EV from surplus PV (power being exported to the grid).
 #
+# Create a toggle helper first (Settings > Devices & services > Helpers > Toggle,
+# named "EV solar charging", or in configuration.yaml: input_boolean: ev_solar_charging:).
+# ON  = this automation controls charging from PV surplus.
+# OFF = automation does nothing, and the current limit is reset to the charger's
+#       maximum so you can charge normally (use the Charging switch as usual).
+#
 # Replace the entity IDs with your own:
+#   input_boolean.ev_solar_charging                 - the toggle above
 #   sensor.solark_grid_export_power                 - grid export power in W, positive when exporting
 #   switch.garage_grizzl_e_charger_charging         - Charging switch
 #   number.garage_grizzl_e_charger_current_limit    - Current Limit number
@@ -22,7 +29,8 @@ triggers:
   - trigger: template
     id: start
     value_template: >
-      {{ is_state('switch.garage_grizzl_e_charger_charging', 'off')
+      {{ is_state('input_boolean.ev_solar_charging', 'on')
+         and is_state('switch.garage_grizzl_e_charger_charging', 'off')
          and (((states('sensor.solark_grid_export_power')|float(0)
               + states('sensor.garage_grizzl_e_charger_power')|float(0))
               / states('sensor.garage_grizzl_e_charger_voltage')|float(240)) | int(0))
@@ -31,12 +39,17 @@ triggers:
   - trigger: template
     id: stop
     value_template: >
-      {{ is_state('switch.garage_grizzl_e_charger_charging', 'on')
+      {{ is_state('input_boolean.ev_solar_charging', 'on')
+         and is_state('switch.garage_grizzl_e_charger_charging', 'on')
          and (((states('sensor.solark_grid_export_power')|float(0)
               + states('sensor.garage_grizzl_e_charger_power')|float(0))
               / states('sensor.garage_grizzl_e_charger_voltage')|float(240)) | int(0))
              < state_attr('number.garage_grizzl_e_charger_current_limit', 'min')|int(7) }}
     for: "00:05:00"
+  - trigger: state
+    id: disabled
+    entity_id: input_boolean.ev_solar_charging
+    to: "off"
   - trigger: time_pattern
     id: adjust
     minutes: "/1"
@@ -53,8 +66,16 @@ actions:
         sequence:
           - action: switch.turn_off
             target: { entity_id: switch.garage_grizzl_e_charger_charging }
+      - conditions: "{{ trigger.id == 'disabled' }}"
+        sequence:
+          - action: number.set_value
+            target: { entity_id: number.garage_grizzl_e_charger_current_limit }
+            data: { value: "{{ max_amps }}" }
       - conditions:
           - "{{ trigger.id == 'adjust' }}"
+          - condition: state
+            entity_id: input_boolean.ev_solar_charging
+            state: "on"
           - condition: state
             entity_id: switch.garage_grizzl_e_charger_charging
             state: "on"
