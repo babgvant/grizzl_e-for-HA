@@ -86,6 +86,15 @@ grizzle_e:
 - **Pilot State**: EV connection status
 - **RSSI**: WiFi signal strength (dBm)
 
+## Controls
+
+- **Charging** (switch): allow or suspend charging
+- **Current Limit** (number): maximum charge current in amps, within the range the EVSE reports
+
+## Sample Automations
+
+- [Solar surplus charging](sample_automations/solar_surplus_charging.yaml): start, stop and adjust the charge current based on power being exported to the grid. Edit the entity IDs for your setup.
+
 ## Troubleshooting: Verify EVSE Connectivity Outside of Home Assistant
 
 If the integration fails, and the integration is running in Home Assistant, but cannot connect to the Grizzl-E EVSE, first verify that you can access your Grizzl-E EVSE over the network **without** Home Assistant involved.

@@ -1,0 +1,65 @@
+# Charge the EV from surplus PV (power being exported to the grid).
+#
+# Replace the entity IDs with your own:
+#   sensor.solark_grid_export_power                 - grid export power in W, positive when exporting
+#   switch.garage_grizzl_e_charger_charging         - Charging switch
+#   number.garage_grizzl_e_charger_current_limit    - Current Limit number
+#   sensor.garage_grizzl_e_charger_power / _voltage - charger Power (W) / Voltage (V) sensors
+#
+# Once the car charges, export drops by what the car draws, so the surplus is
+# export + the charger's own power. The min/max amps come from the charger via
+# the Current Limit entity's min/max attributes.
+alias: EV solar surplus charging
+mode: single
+variables:
+  export_w: "{{ states('sensor.solark_grid_export_power') | float(0) }}"
+  ev_w: "{{ states('sensor.garage_grizzl_e_charger_power') | float(0) }}"
+  volts: "{{ states('sensor.garage_grizzl_e_charger_voltage') | float(240) }}"
+  min_amps: "{{ state_attr('number.garage_grizzl_e_charger_current_limit', 'min') | int(7) }}"
+  max_amps: "{{ state_attr('number.garage_grizzl_e_charger_current_limit', 'max') | int(32) }}"
+  avail_amps: "{{ ((export_w + ev_w) / volts) | int(0) }}"
+triggers:
+  - trigger: template
+    id: start
+    value_template: >
+      {{ is_state('switch.garage_grizzl_e_charger_charging', 'off')
+         and (((states('sensor.solark_grid_export_power')|float(0)
+              + states('sensor.garage_grizzl_e_charger_power')|float(0))
+              / states('sensor.garage_grizzl_e_charger_voltage')|float(240)) | int(0))
+             >= state_attr('number.garage_grizzl_e_charger_current_limit', 'min')|int(7) }}
+    for: "00:05:00"
+  - trigger: template
+    id: stop
+    value_template: >
+      {{ is_state('switch.garage_grizzl_e_charger_charging', 'on')
+         and (((states('sensor.solark_grid_export_power')|float(0)
+              + states('sensor.garage_grizzl_e_charger_power')|float(0))
+              / states('sensor.garage_grizzl_e_charger_voltage')|float(240)) | int(0))
+             < state_attr('number.garage_grizzl_e_charger_current_limit', 'min')|int(7) }}
+    for: "00:05:00"
+  - trigger: time_pattern
+    id: adjust
+    minutes: "/1"
+actions:
+  - choose:
+      - conditions: "{{ trigger.id == 'start' }}"
+        sequence:
+          - action: number.set_value
+            target: { entity_id: number.garage_grizzl_e_charger_current_limit }
+            data: { value: "{{ [avail_amps, max_amps] | min }}" }
+          - action: switch.turn_on
+            target: { entity_id: switch.garage_grizzl_e_charger_charging }
+      - conditions: "{{ trigger.id == 'stop' }}"
+        sequence:
+          - action: switch.turn_off
+            target: { entity_id: switch.garage_grizzl_e_charger_charging }
+      - conditions:
+          - "{{ trigger.id == 'adjust' }}"
+          - condition: state
+            entity_id: switch.garage_grizzl_e_charger_charging
+            state: "on"
+          - "{{ avail_amps >= min_amps }}"
+        sequence:
+          - action: number.set_value
+            target: { entity_id: number.garage_grizzl_e_charger_current_limit }
+            data: { value: "{{ [[avail_amps, max_amps] | min, min_amps] | max }}" }
