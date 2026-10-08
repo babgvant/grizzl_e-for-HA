@@ -1,6 +1,7 @@
 # Changelog
 
 ## v1.8
+- Added a **Current Limit** number entity (`currentSet`, bounded by the charger's `minCurrent`..`curDesign`) so the charge current can be set from Home Assistant, e.g. to follow PV export. Together with the Charging switch this allows solar-surplus automations.
 - Reduce "Timeout on reading data from socket" errors: raised `SOCKET_TIMEOUT` to 15s and `REQUEST_TIMEOUT` to 30s, and added a single automatic retry (`REQUEST_RETRIES`) before a poll is marked failed. Timeout/connection errors between retries are logged at debug level only.
 
 ## v1.6
